@@ -49,10 +49,12 @@ type Estado = [(Id, Valor)]
 type AmbienteClasses = [(Id, ClasseDef)]
 
 
-instance Show ValorFun where
-    show (Numero n) = show n
-    show (Funcao f) = "Function definition cannot be printed!"
-    show Excecao = "Excecao durante a execucao do interpretador"
+instance Show Valor where
+  show (VNum n) = show n
+  show (VBool b) = show b
+  show (VObj (Objeto c _)) = "<objeto:" ++ c ++ ">"
+  show (VFun _) = "<função>"
+  show Erro     = "Erro"
 
 
 
