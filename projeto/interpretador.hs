@@ -64,6 +64,24 @@ instance Show Valor where
 
 
 
+-- === Funções auxiliares para o Estado ===
+busca :: Id -> Estado -> Valor
+busca x [] = Erro
+busca x ((y,v):r) = if x == y then v else busca x r
+
+escreve :: (Id, Valor) -> Estado -> Estado
+escreve (x,v) [] = [(x,v)]
+escreve (x,v) ((y,u):r)
+  | x == y    = (x,v):r
+  | otherwise = (y,u):escreve (x,v) r
+
+-- === Funções auxiliares previstas para o AmbienteClasse ===
+buscaClasse :: Id -> AmbienteClasse -> Maybe ClasseDef
+buscaClasse _ [] = Nothing
+buscaClasse nome ((idClasse, def):resto)
+  | nome == idClasse = Just def
+  | otherwise        = buscaClasse nome resto
+
 
 ambientesimples = [("+",VFun (\x -> (VFun (\y -> somaValorFun x y)))),
                     ("*",VFun (\x -> (VFun (\y -> multValorFun x y))))]
@@ -74,24 +92,5 @@ somaValorFun _ _ = Excecao
 multValorFun (Numero x) (Numero y) = Numero (x*y)
 multValorFun _ _ = Excecao
 
--- Temos agora duas funções de interpretação, uma para termos e uma
--- para programas. A de termos simplesmente lê o ambiente. A de programa
--- propaga alterações no ambiente, para acumular as funções definidas.
 
-intTermo a (Identifier i) = getValor i a
-intTermo a (Literal l) = Numero l
-intTermo a (Lambda i t) = Funcao (\v -> intTermo ((i,v):a) t)
-intTermo a (Aplicacao t1 t2) = aplica v1 v2
-                                where v1 = intTermo a t1
-                                      v2 = intTermo a t2
-
-intPrograma a [] = Excecao
-intPrograma a [(Def i t)] = intTermo a t
-intPrograma a ((Def i t):ds) = intPrograma ((i,v):a) ds
-                               where v = intTermo a t
-
-getValor i [] = Excecao
-getValor i ((j,v):l) = if i == j then v else getValor i l
-
-aplica (Funcao f) v = f v
 aplica _ _ = Excecao
