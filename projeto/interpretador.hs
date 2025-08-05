@@ -22,7 +22,13 @@ data Termo = Identifier Id
                 | Add Termo Termo -- adição
                 | InstanceOf Termo Id -- Verifica se um objeto é uma instância de uma classe
                 | Fun Id [Id] Termo -- Nome, parâmetros, corpo
-                
+
+
+data Objeto = Objeto {
+  classe :: Id,
+  atributos :: [(Id, Valor)],
+  metodos :: [(Id, ([Id], Termo))] -- nome do método, parâmetros, corpo
+}                
 
 
 data Valor = VNum Numero
@@ -31,8 +37,22 @@ data Valor = VNum Numero
         | VFun ([Valor] -> Estado -> (Valor, Estado))
         | Erro     
 
-               
+data ClasseDef = Classe {
+  nomeClasse :: Id,
+  superClasses :: [Id],
+  atributosClasse :: [(Id, Termo)],
+  metodosClasse :: [(Id, [Id], Termo)]
+}
+
 type Estado = [(Id, Valor)] 
+
+type AmbienteClasses = [(Id, ClasseDef)]
+
+
+instance Show ValorFun where
+    show (Numero n) = show n
+    show (Funcao f) = "Function definition cannot be printed!"
+    show Excecao = "Excecao durante a execucao do interpretador"
 
 
 
