@@ -25,11 +25,14 @@ data Termo = Identifier Id
                 
 
 
-             
+data Valor = VNum Numero
+        | VBool Booleano
+        | VObj Objeto
+        | VFun ([Valor] -> Estado -> (Valor, Estado))
+        | Erro     
 
                
-
-                
+type Estado = [(Id, Valor)] 
 
 
 
