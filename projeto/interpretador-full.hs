@@ -356,9 +356,11 @@ programaTeste4 =
 -- Programa 5: For loop que incrementa variável
 programaTeste5 :: [Termo]
 programaTeste5 =
-  [ For "i" 
+  [ 
+    Assign (Identifier "soma") (LiteralNum 4),
+    For "i" 
       (LiteralNum 0)                         -- inicialização i = 0
-      (LiteralBool True)                     -- condição sempre true para exemplo (seria melhor usar i < 3)
+      (LessThan (Identifier "i") (LiteralNum 3))                     -- condição sempre true para exemplo (seria melhor usar i < 3)
       (Assign (Identifier "i") (Add (Identifier "i") (LiteralNum 1))) -- atualização: i = i + 1
       (Assign (Identifier "soma") (Add (Identifier "soma") (LiteralNum 1))) -- corpo: soma = soma + 1
   ]
@@ -410,7 +412,7 @@ ambienteClasseInicial = []
 -- Rodando o interpretador
 main :: IO ()
 main = do
-  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTeste7
+  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTeste5
   putStrLn $ "Valor final: " ++ show valor
   putStrLn $ "Estado final: " ++ show est
   putStrLn $ "Heap final: " ++ show hp
