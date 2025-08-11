@@ -94,3 +94,48 @@ multValorFun _ _ = Excecao
 
 
 aplica _ _ = Excecao
+
+
+
+-- Interpretar classe adicionando no ambiente
+intTermo a h ac (Class nome sup atrs metodos) = 
+  let def = Classe nome sup atrs metodos
+  in (VNum 0, a, h, (nome, def) : ac)  -- retorna novo ambiente de classes
+
+-- New
+intTermo a h ac (New nome args) = 
+  -- Avalia args, pega a classe do ambiente, inicializa atributos, aloca objeto no heap
+  ...
+
+-- Call
+intTermo a h ac (Call obj termoMetodo args) = 
+  -- Avalia obj, avalia args, busca método, cria ambiente com this e args, executa corpo
+  ...
+
+-- While
+intTermo a h ac (While cond corpo) = 
+  -- Enquanto intTermo a h ac cond == VBool True, executa corpo
+  ...
+
+-- If
+intTermo a h ac (If cond t1 t2) = 
+  -- Se cond é True executa t1, senão t2
+  ...
+
+-- InstanceOf
+intTermo a h ac (InstanceOf obj nomeClasse) =
+  -- Avalia obj, verifica se classe do objeto é ou herda nomeClasse
+  ...
+
+-- This
+-- No ambiente de execução 'a', 'this' está definido. Ao interpretar 'This', retorna o valor associado.
+
+-- For
+intTermo a h ac (For id init cond incr corpo) = 
+  -- Executa init (escreve em estado), enquanto cond True executa corpo e incr
+  ...
+
+-- Fun
+intTermo a h ac (Fun nome args corpo) = 
+  -- Cria VFun que recebe argumentos, atualiza estado, executa corpo
+  ...
