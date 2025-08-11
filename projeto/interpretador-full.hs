@@ -16,6 +16,7 @@ data Termo = Identifier Id
           | CallFun Id [Termo] -- chamada de função normal: nome da função, lista de argumentos
           | Class Id [Id] [(Id,Termo)] [(Id, [Id], Termo)] -- Nome, heranças, atributos, métodos
           | Assign Termo Termo -- Atribuição de variável
+          | Attr Termo Id -- Atributo de um objeto
           | Mul Termo Termo -- Multiplicação
           | Add Termo Termo -- adição
           | InstanceOf Termo Id -- Verifica se um objeto é uma instância de uma classe
@@ -240,6 +241,18 @@ intTermo est heap ac termo = case termo of
         est2 = escreve (id, v) est1
     in (v, est2, heap1, ac1)
 
+  Attr objTerm atributo ->
+    let (vObj, est1, heap1, ac1) = intTermo est heap ac objTerm
+    in case vObj of
+      VAddr addr -> case buscaObjeto addr heap1 of
+        Just obj -> case lookup atributo (atributosObj obj) of
+          Just val -> (val, est1, heap1, ac1)
+          Nothing -> (Erro ("Atributo não encontrado: " ++ atributo), est1, heap1, ac1)
+        Nothing -> (Erro ("Objeto não encontrado no heap no endereço: " ++ show addr), est1, heap1, ac1)
+      Erro msg -> (Erro ("Erro no objeto para acesso de atributo: " ++ msg), est1, heap1, ac1)
+      _ -> (Erro "Tentativa de acessar atributo em valor que não é objeto", est1, heap1, ac1)
+
+
   Add t1 t2 ->
     let (v1, est1, heap1, ac1) = intTermo est heap ac t1
         (v2, est2, heap2, ac2) = intTermo est1 heap1 ac1 t2
@@ -398,8 +411,12 @@ programaTeste7 =
   ]
 
 
-
-
+programaExemploAttr :: [Termo]
+programaExemploAttr =
+  [ Class "Ponto" [] [("x", LiteralNum 10), ("y", LiteralNum 20)] []
+  , Assign (Identifier "p") (New "Ponto" [])
+  , Attr (Identifier "p") "x"
+  ]
 
 
 -- Observação: para atribuir a atributo (ex: p.x = 100) talvez precise adaptar o interpretador para isso.
@@ -425,7 +442,7 @@ ambienteClasseInicial = []
 -- Rodando o interpretador
 main :: IO ()
 main = do
-  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTeste6
+  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaExemploAttr
   putStrLn $ "Valor final: " ++ show valor
   putStrLn $ "Estado final: " ++ show est
   putStrLn $ "Heap final: " ++ show hp
