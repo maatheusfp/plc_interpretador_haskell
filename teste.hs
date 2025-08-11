@@ -13,6 +13,7 @@ data Termo = Identifier Id
           | While Termo Termo -- Condição, corpo
           | For Id Termo Termo Termo Termo -- Inicialização, condição, atualização, corpo
           | Call Termo Id [Termo]  -- objeto, método, argumentos
+          | CallFun Id [Termo] -- chamada de função normal: nome da função, lista de argumentos
           | Class Id [Id] [(Id,Termo)] [(Id, [Id], Termo)] -- Nome, heranças, atributos, métodos
           | Assign Termo Termo -- Atribuição de variável
           | Mul Termo Termo -- Multiplicação
@@ -174,6 +175,9 @@ intTermo est heap ac termo = case termo of
       Erro msg -> (Erro ("Erro no objeto da chamada: " ++ msg), est1, heap1, ac1)
       _ -> (Erro "Tentativa de chamar método em um valor que não é objeto", est1, heap1, ac1)
 
+
+   
+
   While cond corpo ->
     let loop est' heap' ac' =
           let (vCond, est1, heap1, ac1) = intTermo est' heap' ac' cond
@@ -221,6 +225,15 @@ intTermo est heap ac termo = case termo of
                 )
         est' = escreve (nome, f) est
     in (f, est', heap, ac)
+
+  CallFun nome args ->
+    case busca nome est of
+      VFun f ->
+        let (vals, est1, heap1, ac1) = avaliaLista est heap ac args
+            (v, est2, heap2, ac2) = f vals est1 heap1 ac1
+        in (v, est2, heap2, ac2)
+      _ -> (Erro ("Função não encontrada ou não é função: " ++ nome), est, heap, ac)
+
 
   Assign (Identifier id) termo2 ->
     let (v, est1, heap1, ac1) = intTermo est heap ac termo2
@@ -368,8 +381,8 @@ programaTeste5 =
 -- Programa 6: Função que soma dois números e usa ela
 programaTeste6 :: [Termo]
 programaTeste6 =
-  [ Fun "soma" ["x", "y"] (Add (Identifier "x") (Identifier "y"))
-  , Call (Identifier "soma") [] [LiteralNum 3, LiteralNum 4]
+  [ Fun "soma" ["x", "y"] (Mul (Identifier "x") (Identifier "y"))
+  , CallFun "soma" [LiteralNum 7, LiteralNum 4]
   ]
 
 -- Programa 7: Usando instanceof
@@ -412,7 +425,7 @@ ambienteClasseInicial = []
 -- Rodando o interpretador
 main :: IO ()
 main = do
-  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTeste5
+  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTeste6
   putStrLn $ "Valor final: " ++ show valor
   putStrLn $ "Estado final: " ++ show est
   putStrLn $ "Heap final: " ++ show hp
