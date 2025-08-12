@@ -15,7 +15,7 @@ data Termo = Identifier Id
           | Call Termo Id [Termo]  -- objeto, método, argumentos
           | CallFun Id [Termo] -- chamada de função normal: nome da função, lista de argumentos
           | Class Id [Id] [(Id,Termo)] [(Id, [Id], Termo)] -- Nome, heranças, atributos, métodos
-          | Assign Termo Termo -- Atribuição de variável
+          | Assign Termo Termo -- Atribuição de variável ou atributo
           | Attr Termo Id -- Atributo de um objeto
           | Mul Termo Termo -- Multiplicação
           | Add Termo Termo -- adição
@@ -49,7 +49,7 @@ type AmbienteClasse = [(Id, ClasseDef)]
 data Objeto = Objeto {
   classeObj :: Id,
   atributosObj :: [(Id, Valor)]
-} deriving ( Show)
+} deriving (Show)
 
 data ClasseDef = Classe {
   nomeClasse :: Id,
@@ -83,6 +83,13 @@ alocaObjeto obj heap =
   let novoEnd = if null heap then 0 else fst (last heap) + 1
   in (novoEnd, heap ++ [(novoEnd, obj)])
 
+-- Atualiza objeto na heap
+atualizaObjeto :: Endereco -> Objeto -> Heap -> Heap
+atualizaObjeto _ _ [] = []
+atualizaObjeto addr novoObj ((e,obj):resto)
+  | addr == e = (e, novoObj) : resto
+  | otherwise = (e, obj) : atualizaObjeto addr novoObj resto
+
 -- Busca classe no ambiente de classes
 buscaClasse :: Id -> AmbienteClasse -> Maybe ClasseDef
 buscaClasse _ [] = Nothing
@@ -97,6 +104,24 @@ herdaDe sub sup ac
   | otherwise = case buscaClasse sub ac of
       Nothing -> False
       Just (Classe _ supers _ _) -> any (\c -> herdaDe c sup ac) supers
+
+-- Converte valor para termo (para construtores)
+valorParaTermo :: Valor -> Termo
+valorParaTermo (VNum n) = LiteralNum n
+valorParaTermo (VBool b) = LiteralBool b
+valorParaTermo (VAddr a) = Identifier ("ref_" ++ show a) -- placeholder
+valorParaTermo _ = LiteralNum 0 -- fallback
+
+-- Combina atributos da classe com argumentos do construtor
+combinarAtributosComArgs :: [(Id, Termo)] -> [Valor] -> [(Id, Termo)]
+combinarAtributosComArgs atribs args = 
+  let argTermos = map valorParaTermo args
+      atribsComArgs = zipWith (\(id, defaultTerm) argTerm -> 
+                                if null args then (id, defaultTerm) 
+                                else (id, argTerm)) 
+                              atribs 
+                              (argTermos ++ repeat (LiteralNum 0))
+  in take (length atribs) atribsComArgs
 
 -- Interpretador de programas
 intPrograma :: Estado -> Heap -> AmbienteClasse -> [Termo] -> (Valor, Estado, Heap, AmbienteClasse)
@@ -154,11 +179,14 @@ intTermo est heap ac termo = case termo of
       Nothing -> (Erro ("Classe não encontrada: " ++ nome), est, heap, ac)
       Just classeDef ->
         let (valsArgs, est1, heap1, ac1) = avaliaLista est heap ac args
-            (atribVals, est2, heap2, ac2) = inicializaAtributos est1 heap1 ac1 (atributosClasse classeDef)
+            -- Usar argumentos para inicializar atributos quando fornecidos
+            atribsParaInicializar = if null valsArgs 
+                                   then atributosClasse classeDef
+                                   else combinarAtributosComArgs (atributosClasse classeDef) valsArgs
+            (atribVals, est2, heap2, ac2) = inicializaAtributos est1 heap1 ac1 atribsParaInicializar
             obj = Objeto nome atribVals
             (end, heap3) = alocaObjeto obj heap2
-            est3 = escreve ("this", VAddr end) est2
-        in (VAddr end, est3, heap3, ac2)
+        in (VAddr end, est2, heap3, ac2)
 
   Call objTerm nomeMetodo args ->
     let (vObj, est1, heap1, ac1) = intTermo est heap ac objTerm
@@ -175,9 +203,6 @@ intTermo est heap ac termo = case termo of
             in (vRet, est5, heap5, ac3)
       Erro msg -> (Erro ("Erro no objeto da chamada: " ++ msg), est1, heap1, ac1)
       _ -> (Erro "Tentativa de chamar método em um valor que não é objeto", est1, heap1, ac1)
-
-
-   
 
   While cond corpo ->
     let loop est' heap' ac' =
@@ -235,11 +260,27 @@ intTermo est heap ac termo = case termo of
         in (v, est2, heap2, ac2)
       _ -> (Erro ("Função não encontrada ou não é função: " ++ nome), est, heap, ac)
 
-
+  -- Atribuição tanto de variáveis quanto de atributos
   Assign (Identifier id) termo2 ->
     let (v, est1, heap1, ac1) = intTermo est heap ac termo2
         est2 = escreve (id, v) est1
     in (v, est2, heap1, ac1)
+
+  Assign (Attr objTerm atributo) termo2 ->
+    let (vObj, est1, heap1, ac1) = intTermo est heap ac objTerm
+        (vVal, est2, heap2, ac2) = intTermo est1 heap1 ac1 termo2
+    in case vObj of
+      VAddr addr -> case buscaObjeto addr heap2 of
+        Just obj -> 
+          let novosAtrib = escreve (atributo, vVal) (atributosObj obj)
+              novoObj = obj { atributosObj = novosAtrib }
+              heap3 = atualizaObjeto addr novoObj heap2
+          in (vVal, est2, heap3, ac2)
+        Nothing -> (Erro ("Objeto não encontrado no endereço: " ++ show addr), est2, heap2, ac2)
+      Erro msg -> (Erro ("Erro no objeto para atribuição: " ++ msg), est2, heap2, ac2)
+      _ -> (Erro "Tentativa de atribuir a atributo de valor que não é objeto", est2, heap2, ac2)
+
+  Assign _ _ -> (Erro "Formato de atribuição inválido", est, heap, ac)
 
   Attr objTerm atributo ->
     let (vObj, est1, heap1, ac1) = intTermo est heap ac objTerm
@@ -251,7 +292,6 @@ intTermo est heap ac termo = case termo of
         Nothing -> (Erro ("Objeto não encontrado no heap no endereço: " ++ show addr), est1, heap1, ac1)
       Erro msg -> (Erro ("Erro no objeto para acesso de atributo: " ++ msg), est1, heap1, ac1)
       _ -> (Erro "Tentativa de acessar atributo em valor que não é objeto", est1, heap1, ac1)
-
 
   Add t1 t2 ->
     let (v1, est1, heap1, ac1) = intTermo est heap ac t1
@@ -305,8 +345,6 @@ intTermo est heap ac termo = case termo of
 
   _ -> (Erro "Expressão inválida", est, heap, ac)
 
-
-
 -- Avalia lista de termos em sequência
 avaliaLista :: Estado -> Heap -> AmbienteClasse -> [Termo] -> ([Valor], Estado, Heap, AmbienteClasse)
 avaliaLista est heap ac [] = ([], est, heap, ac)
@@ -338,7 +376,9 @@ buscaMetodoClasse nomeMetodo nomeClasse ac =
                               Just res -> Just res
                               Nothing -> buscaEmSuper s
 
-
+-- ===============================
+-- PROGRAMAS DE TESTE
+-- ===============================
 
 -- Programa 1: Criar objeto Ponto e chamar getX
 programaTeste1 :: [Termo]
@@ -419,9 +459,6 @@ programaExemploAttr =
   ]
 
 
--- Observação: para atribuir a atributo (ex: p.x = 100) talvez precise adaptar o interpretador para isso.
-
-
 -- Programa exemplo usando assign para testar
 programaAssign :: [Termo]
 programaAssign = [
@@ -458,6 +495,25 @@ programaTeste10 =
   , Call (Identifier "obj") "obterValor" []
   ]
 
+-- Programa 11: New simples
+programaTesteNew :: [Termo]
+programaTesteNew =
+  [
+    Class "Teste" [] [("a", LiteralNum 5), ("b", LiteralNum 10)] [],
+    
+    -- Sem argumentos
+    Assign (Identifier "obj1") (New "Teste" []),
+    
+    -- Com argumentos  
+    Assign (Identifier "obj2") (New "Teste" [LiteralNum 20, LiteralNum 30]),
+    
+    -- Somar atributos dos dois objetos
+    Add 
+      (Add (Attr (Identifier "obj1") "a") (Attr (Identifier "obj1") "b"))  -- 5 + 10 = 15
+      (Add (Attr (Identifier "obj2") "a") (Attr (Identifier "obj2") "b"))  -- 20 + 30 = 50
+    -- Total: 15 + 50 = 65
+  ]
+
 -- Estado, heap e ambiente de classes vazios inicialmente
 estadoInicial :: Estado
 estadoInicial = []
@@ -471,7 +527,7 @@ ambienteClasseInicial = []
 -- Rodando o interpretador
 main :: IO ()
 main = do
-  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaExemploAttr
+  let (valor, est, hp, ac) = intPrograma estadoInicial heapInicial ambienteClasseInicial programaTesteNew
   putStrLn $ "Valor final: " ++ show valor
   putStrLn $ "Estado final: " ++ show est
   putStrLn $ "Heap final: " ++ show hp
