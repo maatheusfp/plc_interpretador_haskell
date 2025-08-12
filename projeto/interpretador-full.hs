@@ -429,6 +429,35 @@ programaAssign = [
     Identifier "a"                            -- retorna o valor de "a"
   ]
 
+-- Programa 8: Demonstrando DEF (Fun) - Definição de função simples
+programaTeste8 :: [Termo]
+programaTeste8 =
+  [ Fun "dobrar" ["numero"] (Mul (Identifier "numero") (LiteralNum 2))
+  , CallFun "dobrar" [LiteralNum 5]
+  ]
+
+-- Programa 9: Demonstrando FOR - Loop simples que conta de 0 a 2
+programaTeste9 :: [Termo]
+programaTeste9 =
+  [ Assign (Identifier "contador") (LiteralNum 0)
+  , For "i" 
+      (LiteralNum 0)                                      -- inicialização: i = 0
+      (LessThan (Identifier "i") (LiteralNum 3))          -- condição: i < 3
+      (Assign (Identifier "i") (Add (Identifier "i") (LiteralNum 1))) -- atualização: i = i + 1
+      (Assign (Identifier "contador") (Add (Identifier "contador") (LiteralNum 1))) -- corpo: contador = contador + 1
+  , Identifier "contador" -- retorna o valor do contador
+  ]
+
+-- Programa 10: Demonstrando THIS - Acesso a atributo próprio em método
+programaTeste10 :: [Termo]
+programaTeste10 =
+  [ Class "MinhaClasse" [] 
+      [("valor", LiteralNum 42)] 
+      [("obterValor", [], Attr This "valor")]  -- método que retorna this.valor
+  , Assign (Identifier "obj") (New "MinhaClasse" [])
+  , Call (Identifier "obj") "obterValor" []
+  ]
+
 -- Estado, heap e ambiente de classes vazios inicialmente
 estadoInicial :: Estado
 estadoInicial = []
