@@ -123,6 +123,38 @@ combinarAtributosComArgs atribs args =
                               (argTermos ++ repeat (LiteralNum 0))
   in take (length atribs) atribsComArgs
 
+-- Avalia lista de termos em sequência
+avaliaLista :: Estado -> Heap -> AmbienteClasse -> [Termo] -> ([Valor], Estado, Heap, AmbienteClasse)
+avaliaLista est heap ac [] = ([], est, heap, ac)
+avaliaLista est heap ac (t:ts) =
+  let (v, est1, heap1, ac1) = intTermo est heap ac t
+      (vs, est2, heap2, ac2) = avaliaLista est1 heap1 ac1 ts
+  in (v:vs, est2, heap2, ac2)
+
+-- Inicializa os atributos de um objeto
+inicializaAtributos :: Estado -> Heap -> AmbienteClasse -> [(Id, Termo)] -> ([(Id, Valor)], Estado, Heap, AmbienteClasse)
+inicializaAtributos est heap ac [] = ([], est, heap, ac)
+inicializaAtributos est heap ac ((id, termo):resto) =
+  let (v, est1, heap1, ac1) = intTermo est heap ac termo
+      (vs, est2, heap2, ac2) = inicializaAtributos est1 heap1 ac1 resto
+  in ((id, v) : vs, est2, heap2, ac2)
+
+-- Busca método em classe, considerando herança
+buscaMetodoClasse :: Id -> Id -> AmbienteClasse -> Maybe ([Id], Termo)
+buscaMetodoClasse nomeMetodo nomeClasse ac =
+  case buscaClasse nomeClasse ac of
+    Nothing -> Nothing
+    Just (Classe _ supers _ metodos) ->
+      case lookup nomeMetodo (map (\(n, args, corpo) -> (n, (args, corpo))) metodos) of
+        Just res -> Just res
+        Nothing -> buscaEmSuper supers
+      where
+        buscaEmSuper [] = Nothing
+        buscaEmSuper (c:s) = case buscaMetodoClasse nomeMetodo c ac of
+                              Just res -> Just res
+                              Nothing -> buscaEmSuper s
+
+
 -- Interpretador de programas
 intPrograma :: Estado -> Heap -> AmbienteClasse -> [Termo] -> (Valor, Estado, Heap, AmbienteClasse)
 intPrograma est heap ac [] = (VNum 0, est, heap, ac)
@@ -345,36 +377,6 @@ intTermo est heap ac termo = case termo of
 
   _ -> (Erro "Expressão inválida", est, heap, ac)
 
--- Avalia lista de termos em sequência
-avaliaLista :: Estado -> Heap -> AmbienteClasse -> [Termo] -> ([Valor], Estado, Heap, AmbienteClasse)
-avaliaLista est heap ac [] = ([], est, heap, ac)
-avaliaLista est heap ac (t:ts) =
-  let (v, est1, heap1, ac1) = intTermo est heap ac t
-      (vs, est2, heap2, ac2) = avaliaLista est1 heap1 ac1 ts
-  in (v:vs, est2, heap2, ac2)
-
--- Inicializa os atributos de um objeto
-inicializaAtributos :: Estado -> Heap -> AmbienteClasse -> [(Id, Termo)] -> ([(Id, Valor)], Estado, Heap, AmbienteClasse)
-inicializaAtributos est heap ac [] = ([], est, heap, ac)
-inicializaAtributos est heap ac ((id, termo):resto) =
-  let (v, est1, heap1, ac1) = intTermo est heap ac termo
-      (vs, est2, heap2, ac2) = inicializaAtributos est1 heap1 ac1 resto
-  in ((id, v) : vs, est2, heap2, ac2)
-
--- Busca método em classe, considerando herança
-buscaMetodoClasse :: Id -> Id -> AmbienteClasse -> Maybe ([Id], Termo)
-buscaMetodoClasse nomeMetodo nomeClasse ac =
-  case buscaClasse nomeClasse ac of
-    Nothing -> Nothing
-    Just (Classe _ supers _ metodos) ->
-      case lookup nomeMetodo (map (\(n, args, corpo) -> (n, (args, corpo))) metodos) of
-        Just res -> Just res
-        Nothing -> buscaEmSuper supers
-      where
-        buscaEmSuper [] = Nothing
-        buscaEmSuper (c:s) = case buscaMetodoClasse nomeMetodo c ac of
-                              Just res -> Just res
-                              Nothing -> buscaEmSuper s
 
 -- ===============================
 -- PROGRAMAS DE TESTE
@@ -512,6 +514,30 @@ programaTesteNew =
       (Add (Attr (Identifier "obj1") "a") (Attr (Identifier "obj1") "b"))  -- 5 + 10 = 15
       (Add (Attr (Identifier "obj2") "a") (Attr (Identifier "obj2") "b"))  -- 20 + 30 = 50
     -- Total: 15 + 50 = 65
+  ]
+
+-- Programa 8: Teste de Superclasse, Herança e Sobrescrita de Método
+programaTesteSuperclasse :: [Termo]
+programaTesteSuperclasse =
+  [ -- Define a superclasse 'Animal'
+    Class "Animal" []
+      [("nome", LiteralNum 0)] -- Atributo nome (inicializado com 0, mas poderia ser uma string se a linguagem suportasse)
+      [ ("fazerBarulho", [], LiteralNum 1) -- Representa um "barulho genérico" com o número 1
+      , ("getNome", [], Identifier "nome")
+      ]
+
+  , -- Define a subclasse 'Cachorro' que herda de 'Animal'
+    Class "Cachorro" ["Animal"]
+      [] -- Sem novos atributos
+      [ ("fazerBarulho", [], LiteralNum 2) -- Sobrescreve o método para um "latido", representado pelo número 2
+      ]
+
+  , -- Cria uma instância da subclasse 'Cachorro' e a armazena na variável 'meuCachorro'
+    Assign (Identifier "meuCachorro") (New "Cachorro" [])
+
+  , -- Chama o método 'fazerBarulho' na instância de 'Cachorro'.
+    -- O resultado esperado é 2, pois o método da subclasse deve ser chamado.
+    Call (Identifier "meuCachorro") "fazerBarulho" []
   ]
 
 -- Estado, heap e ambiente de classes vazios inicialmente
